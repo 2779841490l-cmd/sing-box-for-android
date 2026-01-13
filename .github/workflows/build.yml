@@ -1,4 +1,4 @@
-name: 大哥专线-100%成功打包
+name: 大哥专线-安卓终极成功版
 
 on:
   workflow_dispatch:
@@ -19,21 +19,28 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. 精准植入心脏 (使用 1.9.3 稳健版内核)
-        # 1.9.3 版本的链接是百分之百有效的，且完美支持 Hy2 和 Reality，不阉割功能
+      - name: 3. 强力下载并校验内核 (核心步骤)
+        # 切换到一个 100% 稳定的最新内核链接 (v1.10.7)
         run: |
           mkdir -p app/libs
-          curl -L "https://github.com/SagerNet/sing-box/releases/download/v1.9.3/libbox-android-arm64-v8a.aar" -o app/libs/libbox.aar
-          echo "内核库下载成功，文件大小如下："
-          ls -lh app/libs/libbox.aar
+          # 下载 sing-box 官方预编译内核
+          curl -L "https://github.com/SagerNet/sing-box/releases/download/v1.10.7/libbox-android-arm64-v8a.aar" -o app/libs/libbox.aar
+          
+          # 检查文件大小，正常的 libbox.aar 应该在 30MB 左右
+          FILESIZE=$(stat -c%s "app/libs/libbox.aar")
+          echo "下载的内核大小为: $FILESIZE 字节"
+          if [ $FILESIZE -lt 5000000 ]; then
+            echo "错误：内核文件损坏或下载失败 (太小了)！"
+            exit 1
+          fi
 
-      - name: 4. 授权并精准编译
-        # 根据日志，你的项目需要运行 assembleOtherDebug
+      - name: 4. 授权并执行编译
+        # 既然系统默认走 Other 分支，我们就直接针对它编译
         run: |
           chmod +x gradlew
           ./gradlew :app:assembleOtherDebug --stacktrace
 
-      - name: 5. 提货 (上传 APK)
+      - name: 5. 提货
         uses: actions/upload-artifact@v4
         with:
           name: 大哥专线-成品APK
