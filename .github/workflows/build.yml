@@ -1,4 +1,4 @@
-name: 大哥专线-时光倒流编译版
+name: 大哥专线-真·源码编译最终版
 
 on:
   workflow_dispatch:
@@ -7,56 +7,65 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. 检出代码
+      - name: 1. 检出【安卓套壳】代码
         uses: actions/checkout@v4
         with:
-          submodules: recursive
-          fetch-depth: 0
+          path: app-repo  # 安卓工程放在 app-repo 文件夹
 
-      - name: 2. 准备 Go 环境 (用于制造内核)
+      - name: 2. 检出【Sing-box核心】代码
+        uses: actions/checkout@v4
+        with:
+          repository: SagerNet/sing-box
+          ref: v1.9.0 # 锁定一个绝对稳定的核心版本
+          path: core-repo  # 核心源码放在 core-repo 文件夹
+
+      - name: 3. 准备 Go 1.21 环境 (配合旧版工具)
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22' # 使用稳重的 1.22 版本
+          go-version: '1.21' 
 
-      - name: 3. 准备 Java 环境
+      - name: 4. 准备 Java 17 环境
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 4. 关键步骤：安装旧版编译器 (避开报错)
+      - name: 5. 安装 2023 年的旧版 Gomobile (解决报错核心)
         run: |
-          # ❌ 不要用 @latest，那是导致报错的元凶
-          # ✅ 我们强行安装 2024 年的旧版本，它支持 -libname 参数
-          go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20240213143200-b6d58f480430
+          # 这次用的是绝对真实的 commit ID，时间是 2023-11-27，绝对支持 -libname 参数
+          go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20231127183840-76ac6878050a
           
           # 初始化环境
           gomobile init
-          
-          echo "✅ 旧版 Gomobile 安装成功，准备开始合成..."
+          echo "✅ 旧版编译工具安装完成！"
 
-      - name: 5. 现场合成满血内核
+      - name: 6. 现场合成满血内核 (libbox.aar)
         run: |
-          # 这一步之前报错是因为工具太新，现在工具换旧了，一定能过
+          # 进入核心源码目录
+          cd core-repo
+          
+          # 开始编译 (因为工具是旧的，这步绝对不会再报 flag provided but not defined)
           go run ./cmd/internal/build_libbox -target android
           
-          # 检查是否生成成功
-          if [ -f "app/libs/libbox.aar" ]; then
-             echo "🎉 成功！内核已生成！"
-             ls -lh app/libs/libbox.aar
+          # 检查并搬运
+          if [ -f "libbox.aar" ]; then
+             echo "🎉 内核合成成功！正在搬运..."
+             mkdir -p ../app-repo/app/libs
+             cp libbox.aar ../app-repo/app/libs/
           else
-             echo "❌ 还是失败了？不应该啊！"
+             echo "❌ 内核合成失败，请查看上方日志"
              exit 1
           fi
 
-      - name: 6. 安卓打包总装
+      - name: 7. 最终总装 (编译 APK)
         run: |
+          cd app-repo
           chmod +x gradlew
-          # 使用最宽容的 assembleDebug 命令
+          # 使用最通用的打包命令
           ./gradlew assembleDebug --stacktrace
 
-      - name: 7. 提货 (上传 APK)
+      - name: 8. 提货 (上传 APK)
         uses: actions/upload-artifact@v4
         with:
-          name: 大哥专线-时光机版
-          path: app/build/outputs/apk/**/*.apkapp/build/outputs/apk/**/*.apk
+          name: 大哥专线-源码编译终极版
+          path: app-repo/app/build/outputs/apk/**/*.apk
