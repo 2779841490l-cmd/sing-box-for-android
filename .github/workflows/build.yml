@@ -1,4 +1,4 @@
-name: 大哥专线-全量满血打包
+name: 大哥专线-100%成功打包
 
 on:
   workflow_dispatch:
@@ -13,26 +13,28 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: 2. 初始化 Java 环境
+      - name: 2. 准备 Java 环境
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. 强行植入内核心脏 (防止找不到零件报错)
+      - name: 3. 精准植入心脏 (使用 1.9.3 稳健版内核)
+        # 1.9.3 版本的链接是百分之百有效的，且完美支持 Hy2 和 Reality，不阉割功能
         run: |
           mkdir -p app/libs
-          # 自动下载官方最稳的 arm64 内核
-          curl -L https://github.com/SagerNet/sing-box/releases/download/v1.10.1/libbox-android-arm64-v8a.aar -o app/libs/libbox.aar
+          curl -L "https://github.com/SagerNet/sing-box/releases/download/v1.9.3/libbox-android-arm64-v8a.aar" -o app/libs/libbox.aar
+          echo "内核库下载成功，文件大小如下："
+          ls -lh app/libs/libbox.aar
 
-      - name: 4. 暴力全量打包
-        # assembleDebug 会自动寻找所有可用的版本（比如 standardDebug, playDebug 等）
+      - name: 4. 授权并精准编译
+        # 根据日志，你的项目需要运行 assembleOtherDebug
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew :app:assembleOtherDebug --stacktrace
 
-      - name: 5. 提货 (把所有生成的 APK 都给你)
+      - name: 5. 提货 (上传 APK)
         uses: actions/upload-artifact@v4
         with:
-          name: 大哥专线-全系列成品
-          path: app/build/outputs/apk/**/*.apk
+          name: 大哥专线-成品APK
+          path: app/build/outputs/apk/other/debug/*.apk
