@@ -1,0 +1,35 @@
+{
+  "outbounds": [
+    {
+      "type": "urltest",
+      "tag": "🚀智能加速",
+      "outbounds": ["Hy2-极速", "VLESS-保底"],
+      "url": "https://www.google.com/generate_204",
+      "interval": "10m"
+    },
+    {
+      "type": "hysteria2",
+      "tag": "Hy2-极速",
+      "server": "107.174.140.235",
+      "server_port": 56789,
+      "password": "123456",
+      "obfs": { "type": "salamander", "password": "dage666" },
+      "tls": { "enabled": true, "server_name": "www.icloud.com", "insecure": true }
+    },
+    {
+      "type": "vless",
+      "tag": "VLESS-保底",
+      "server": "107.174.140.235",
+      "server_port": 443,
+      "uuid": "3c343d91-b287-4646-b049-086752e67892",
+      "tls": { "enabled": true, "server_name": "www.apple.com", "utls": { "enabled": true, "fingerprint": "chrome" } }
+    },
+    { "type": "direct", "tag": "direct" }
+  ],
+  "route": {
+    "rules": [
+      { "geosite": ["cn"], "geoip": ["cn"], "outbound": "direct" },
+      { "geosite": ["google", "gemini"], "outbound": "🚀智能加速" }
+    ]
+  }
+}
