@@ -1,4 +1,4 @@
-name: 大哥专线-源码级自造满血版
+name: 大哥专线-安卓终极成品包
 
 on:
   workflow_dispatch:
@@ -7,54 +7,42 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. 检出【安卓套壳】代码
+      - name: 1. 检出代码
         uses: actions/checkout@v4
         with:
-          path: app-repo  # 放在这个文件夹里
+          submodules: recursive
+          fetch-depth: 0
 
-      - name: 2. 检出【Sing-box核心】源码
-        uses: actions/checkout@v4
-        with:
-          repository: SagerNet/sing-box
-          ref: main  # 拿最新的核心技术
-          path: core-repo  # 核心放在这
-
-      - name: 3. 准备 Go 1.24 环境 (目前最强内核要求)
-        uses: actions/setup-go@v5
-        with:
-          go-version: '>=1.24.0'
-          check-latest: true
-
-      - name: 4. 准备 Java & 安卓环境
+      - name: 2. 准备 Java 环境
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 5. 暴力合成“心脏” (libbox.aar)
+      - name: 3. 强力下载“原装满血心脏” (libbox.aar)
+        # 这一步是关键！我们直接从官方 Release 下载已经做好的 1.10.1 版本内核
+        # 这个版本完美支持 Hy2 和 Reality 协议
         run: |
-          # 进入核心仓库进行编译
-          cd core-repo
-          go install golang.org/x/mobile/cmd/gomobile@latest
-          gomobile init
+          mkdir -p app/libs
+          echo "开始下载原装内核..."
+          curl -L "https://github.com/SagerNet/sing-box/releases/download/v1.10.1/libbox-android-arm64-v8a.aar" -o app/libs/libbox.aar
           
-          # 现场合成安卓专用的 aar 零件
-          go run ./cmd/internal/build_libbox -target android
-          
-          # 把做好的心脏，塞进安卓套壳的 libs 文件夹
-          mkdir -p ../app-repo/app/libs
-          cp libbox.aar ../app-repo/app/libs/
-          echo "心脏合成成功，已塞入安卓套壳！"
+          # 校验文件大小：正常的内核应该在 30MB 左右
+          FILESIZE=$(stat -c%s "app/libs/libbox.aar")
+          echo "内核下载成功，当前大小: $FILESIZE 字节"
+          if [ $FILESIZE -lt 10000000 ]; then
+            echo "错误：内核下载失败或文件损坏（大小不对）！"
+            exit 1
+          fi
 
-      - name: 6. 最终总装 (编译 APK)
+      - name: 4. 授权并执行总装
+        # 根据你之前的日志，你的项目 Flavor 叫 Other
         run: |
-          cd app-repo
           chmod +x gradlew
-          # 针对你刚才日志里的 assembleOtherDebug 精准开火
           ./gradlew :app:assembleOtherDebug --stacktrace
 
-      - name: 7. 提货 (上传成品)
+      - name: 5. 提货 (上传 APK)
         uses: actions/upload-artifact@v4
         with:
-          name: 大哥专线-源码直出满血版
-          path: app-repo/app/build/outputs/apk/other/debug/*.apk
+          name: 大哥专线-成品APK
+          path: app/build/outputs/apk/other/debug/*.apk
