@@ -1,4 +1,4 @@
-name: 大哥专线-NekoBox满血版
+name: 大哥专线-智能提货版
 
 on:
   workflow_dispatch:
@@ -6,6 +6,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # 给机器人赋予读写权限
+
     steps:
       - name: 1. 检出代码
         uses: actions/checkout@v4
@@ -19,33 +22,41 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. 借用 NekoBox 满血内核 (100% 可用)
-        # 使用 MatsuriDayo 团队维护的稳定版内核 (v1.10.0)
-        # 包含了 Hy2, Reality 等所有协议，无阉割
+      - name: 3. 智能拉取满血内核 (使用 gh 命令行)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # 使用系统令牌，无需配置
         run: |
           mkdir -p app/libs
-          echo "正在从 NekoBox 仓库拉取内核..."
-          curl -L "https://github.com/MatsuriDayo/libbox/releases/download/1.10.0/libbox-1.10.0-android-arm64-v8a.aar" -o app/libs/libbox.aar
+          echo "正在呼叫 GitHub 仓库寻找内核..."
           
-          # 再次校验大小 (正常的应该在 10MB - 30MB 之间)
+          # 逻辑修正：不再用 curl 瞎猜链接，使用 gh 官方工具自动搜索下载
+          # 目标仓库：MatsuriDayo/libbox (最稳的第三方库)
+          # 目标版本：v1.10.0 (稳定版)
+          # 匹配模式：*android-arm64-v8a.aar (自动匹配文件名，不再怕改名)
+          
+          gh release download v1.10.0 -R MatsuriDayo/libbox -p "*android-arm64-v8a.aar" -D app/libs/ || { echo "下载失败"; exit 1; }
+          
+          # 重命名文件，因为下载下来的名字很长，我们要把它变成 app 认识的名字
+          mv app/libs/*android-arm64-v8a.aar app/libs/libbox.aar
+          
+          # 最终质检：如果文件小于 5MB，直接熔断报错，不浪费时间
           FILESIZE=$(stat -c%s "app/libs/libbox.aar")
-          echo "当前内核大小: $FILESIZE 字节"
+          echo "成功捕获内核，体积: $FILESIZE 字节"
           
           if [ $FILESIZE -lt 5000000 ]; then
-             echo "❌ 致命错误：下载的文件太小，可能是死链！停止打包。"
-             exit 1
-          else
-             echo "✅ 内核校验通过！准备组装。"
+            echo "❌ 严重错误：下载的是个空壳！停止流水线。"
+            exit 1
           fi
 
-      - name: 4. 授权并执行总装
-        # 根据你的日志，项目需要 build 'Other' flavor
+      - name: 4. 清理旧缓存并编译
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleOtherDebug --stacktrace
+          ./gradlew clean
+          # 使用最通用的 assembleDebug，自动适配所有版本
+          ./gradlew assembleDebug --stacktrace
 
-      - name: 5. 提货 (上传 APK)
+      - name: 5. 提货 (上传所有产出)
         uses: actions/upload-artifact@v4
         with:
-          name: 大哥专线-Neko内核版
-          path: app/build/outputs/apk/other/debug/*.apk
+          name: 大哥专线-最终成品
+          path: app/build/outputs/apk/**/*.apk
