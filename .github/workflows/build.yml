@@ -1,4 +1,4 @@
-name: 大哥专线-全自动打包工厂-修正版
+name: 大哥专线-稳健版打包
 
 on:
   workflow_dispatch:
@@ -10,43 +10,25 @@ jobs:
       - name: 1. 检出代码
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: recursive  # 自动拉取所有关联插件
           fetch-depth: 0
 
-      - name: 2. 安装稳定的 Go 1.23 (避开 1.24 的严苛检查)
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-          cache: false
-
-      - name: 3. 安装 Java 环境
+      - name: 2. 初始化 Java 环境
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 4. 补齐环境与合成内核 (解决 main module 报错)
-        run: |
-          # 如果没有户口本，强行建一个
-          if [ ! -f go.mod ]; then
-            go mod init github.com/SagerNet/sing-box-for-android
-          fi
-          go mod tidy
-          
-          # 安装必要的合成工具
-          go install golang.org/x/mobile/cmd/gomobile@latest
-          export PATH=$PATH:$(go env GOPATH)/bin
-          gomobile init
-          
-          # 现场合成大脑零件
-          go run ./cmd/internal/build_libbox -target android
-
-      - name: 5. 编译成品 APK
+      - name: 3. 授权并清理环境
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleStandardDebug
+          ./gradlew clean
 
-      - name: 6. 提货 (上传 APK)
+      - name: 4. 直接开始安卓编译 (跳过手动合成内核)
+        # 我们直接打标准 Debug 版，它会自动去下载官方预编译好的 libbox 零件
+        run: ./gradlew :app:assembleStandardDebug --stacktrace
+
+      - name: 5. 提货 (上传 APK)
         uses: actions/upload-artifact@v4
         with:
           name: 大哥专线-成品包
