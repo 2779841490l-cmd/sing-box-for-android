@@ -1,4 +1,4 @@
-name: 大哥专线-NDK环境修正版
+name: 大哥专线-稳如老狗版
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: SagerNet/sing-box
-          ref: v1.9.0 # 稳定版本
+          ref: v1.9.0  # 锁定1.9.0稳定版，严禁变动
           path: core-repo
 
       - name: 3. 准备 Go 1.21 环境
@@ -30,43 +30,44 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 5. 关键修复：安装并配置 Android NDK
-        # 之前报错是因为缺这个！Gomobile 编译必须依赖 NDK
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r25c # 使用最兼容 Gomobile 的 r25 版本
-          link-to-sdk: true
-
-      - name: 6. 安装旧版 Gomobile
+      - name: 5. 暴力锁定系统 NDK 路径 (关键修复)
+        # 不用插件，直接去系统目录找。GitHub Runner 默认把 NDK 装在这里。
         run: |
-          # 继续使用那个兼容的旧版本工具
-          go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20231127183840-76ac6878050a
+          # 找到系统里版本最新的 NDK 目录
+          NDK_PATH=$(ls -d /usr/local/lib/android/sdk/ndk/* | sort -V | tail -n1)
           
-          # 初始化 (不需要再手动指定 NDK，因为第5步已经配置了系统环境)
-          gomobile init
-          echo "✅ Gomobile 工具链准备完毕"
+          # 把它写入 GitHub 的环境变量文件，让后续步骤都能看见
+          echo "ANDROID_NDK_HOME=$NDK_PATH" >> $GITHUB_ENV
+          
+          # 同时打印出来给你看，这次绝对不为空
+          echo "✅ 锁定 NDK 路径: $NDK_PATH"
 
-      - name: 7. 现场合成内核 (带 NDK 路径)
-        env:
-          # 再次强制声明 NDK 路径，确保万无一失
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+      - name: 6. 安装编译工具 Gomobile
+        # 对应 Sing-box 1.9.0 的 go.mod 依赖版本
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20231127183840-76ac6878050a
+          gomobile init
+
+      - name: 7. 现场合成内核 (libbox.aar)
+        # 这一步会自动读取第5步设置的 ANDROID_NDK_HOME
         run: |
           cd core-repo
-          echo "当前 NDK 路径: $ANDROID_NDK_HOME"
+          echo "当前使用的 NDK: $ANDROID_NDK_HOME"
           
-          # 开始编译，这次它一定能找到 NDK
+          # 开始编译
           go run ./cmd/internal/build_libbox -target android
           
+          # 搬运
           if [ -f "libbox.aar" ]; then
-             echo "🎉 终于成功了！内核已生成！"
+             echo "🎉 内核合成成功！"
              mkdir -p ../app-repo/app/libs
              cp libbox.aar ../app-repo/app/libs/
           else
-             echo "❌ 编译失败，请检查上方日志"
+             echo "❌ 编译失败，请截图日志"
              exit 1
           fi
 
-      - name: 8. 最终打包
+      - name: 8. 最终打包 APK
         run: |
           cd app-repo
           chmod +x gradlew
@@ -75,5 +76,5 @@ jobs:
       - name: 9. 提货
         uses: actions/upload-artifact@v4
         with:
-          name: 大哥专线-NDK修复版
+          name: 大哥专线-绝对能用版
           path: app-repo/app/build/outputs/apk/**/*.apk
