@@ -1,4 +1,4 @@
-name: 大哥专线-稳健版打包
+name: 大哥专线-全量无损打包
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ jobs:
       - name: 1. 检出代码
         uses: actions/checkout@v4
         with:
-          submodules: recursive  # 自动拉取所有关联插件
+          submodules: recursive
           fetch-depth: 0
 
       - name: 2. 初始化 Java 环境
@@ -19,17 +19,18 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. 授权并清理环境
+      - name: 3. 授权并清理
         run: |
           chmod +x gradlew
           ./gradlew clean
 
-      - name: 4. 直接开始安卓编译 (跳过手动合成内核)
-        # 我们直接打标准 Debug 版，它会自动去下载官方预编译好的 libbox 零件
-        run: ./gradlew :app:assembleStandardDebug --stacktrace
+      - name: 4. 全量打包 (不猜名字，全都要)
+        # assembleDebug 会构建所有版本（play, universal 等）的测试版
+        run: ./gradlew assembleDebug --stacktrace
 
-      - name: 5. 提货 (上传 APK)
+      - name: 5. 提货 (自动搜索所有生成的 APK)
         uses: actions/upload-artifact@v4
         with:
-          name: 大哥专线-成品包
-          path: app/build/outputs/apk/standard/debug/*.apk
+          name: 大哥专线-全量安装包
+          # 这样写会把所有打出来的 APK 全部打包发给你
+          path: app/build/outputs/apk/**/*.apk
