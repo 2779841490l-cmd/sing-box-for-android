@@ -1,4 +1,4 @@
-name: 大哥专线-全量无损打包
+name: 大哥专线-满血版全自动打包
 
 on:
   workflow_dispatch:
@@ -13,24 +13,30 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: 2. 初始化 Java 环境
+      - name: 2. 初始化环境 (Java 17)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. 授权并清理
+      - name: 3. 强行植入“核心心脏” (解决 libbox.aar 缺失)
+        run: |
+          mkdir -p app/libs
+          # 从官方稳定频道下载最新的原装内核
+          curl -L https://github.com/SagerNet/sing-box/releases/download/v1.10.1/libbox-android-arm64-v8a.aar -o app/libs/libbox.aar
+          echo "内核下载完成，准备组装..."
+
+      - name: 4. 授权并清理
         run: |
           chmod +x gradlew
           ./gradlew clean
 
-      - name: 4. 全量打包 (不猜名字，全都要)
-        # assembleDebug 会构建所有版本（play, universal 等）的测试版
-        run: ./gradlew assembleDebug --stacktrace
+      - name: 5. 组装满血版 APK
+        # 我们直接打 StandardDebug 版，这是目前性能最强的版本
+        run: ./gradlew :app:assembleStandardDebug --stacktrace
 
-      - name: 5. 提货 (自动搜索所有生成的 APK)
+      - name: 6. 提货 (上传 APK)
         uses: actions/upload-artifact@v4
         with:
-          name: 大哥专线-全量安装包
-          # 这样写会把所有打出来的 APK 全部打包发给你
-          path: app/build/outputs/apk/**/*.apk
+          name: 大哥专线-满血成品
+          path: app/build/outputs/apk/standard/debug/*.apk
