@@ -5,7 +5,7 @@
       "tag": "🚀智能加速",
       "outbounds": ["Hy2-极速", "VLESS-保底"],
       "url": "https://www.google.com/generate_204",
-      "interval": "10m"
+      "interval": "5m"
     },
     {
       "type": "hysteria2",
@@ -22,14 +22,20 @@
       "server": "107.174.140.235",
       "server_port": 443,
       "uuid": "3c343d91-b287-4646-b049-086752e67892",
-      "tls": { "enabled": true, "server_name": "www.apple.com", "utls": { "enabled": true, "fingerprint": "chrome" } }
+      "tls": { 
+        "enabled": true, 
+        "server_name": "www.apple.com", 
+        "utls": { "enabled": true, "fingerprint": "chrome" },
+        "reality": { "enabled": true, "public_key": "JHpo-H-roJ61qZzQaKofejfJU33MY-uu8YX-cncn8z0", "short_id": "9b930b77" }
+      }
     },
     { "type": "direct", "tag": "direct" }
   ],
   "route": {
+    "auto_detect_interface": true,
     "rules": [
       { "geosite": ["cn"], "geoip": ["cn"], "outbound": "direct" },
-      { "geosite": ["google", "gemini"], "outbound": "🚀智能加速" }
+      { "geosite": ["google", "gemini", "openai"], "outbound": "🚀智能加速" }
     ]
   }
 }
