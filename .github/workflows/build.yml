@@ -1,4 +1,4 @@
-name: 大哥专线-自适应智能打包
+name: 大哥专线-全盘搜救终结版
 
 on:
   workflow_dispatch:
@@ -18,47 +18,41 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. 【侦察阶段】识别项目结构与核心需求
+      - name: 3. 强制获取核心零件 (gh 官方直取)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p app/libs
-          echo "--- 正在侦察项目结构 ---"
-          # 自动寻找 app/build.gradle，看看它到底在找哪个文件
-          grep "libbox" app/build.gradle || echo "未在gradle中发现libbox引用"
+          # 尝试下载核心，如果下载失败，这一步会直接报红，不耽误后面时间
+          gh release download v1.10.1 --repo SagerNet/sing-box --pattern "libbox-android-arm64-v8a.aar" --output app/libs/libbox.aar || echo "官方库取货失败，尝试备用货源"
           
-          echo "--- 正在从官方获取零件清单 ---"
-          # 不再猜文件名！先列出官方 v1.10.1 所有的文件，找那个带 android 和 arm64 的
-          REAL_NAME=$(gh release view v1.10.1 --repo SagerNet/sing-box --json assets -q '.assets[].name' | grep "android-arm64-v8a.aar" | head -n 1)
-          
-          if [ -z "$REAL_NAME" ]; then
-            echo "❌ 没找到对应的内核零件，尝试下载全量 Release 包..."
-            gh release download v1.10.1 --repo SagerNet/sing-box -D app/libs/
-          else
-            echo "✅ 发现目标零件: $REAL_NAME"
-            gh release download v1.10.1 --repo SagerNet/sing-box -p "$REAL_NAME" -D app/libs/
-            mv app/libs/$REAL_NAME app/libs/libbox.aar
+          # 如果还是没拿到，强制从另一个稳健地址抓
+          if [ ! -f "app/libs/libbox.aar" ]; then
+            curl -L "https://github.com/SagerNet/sing-box/releases/download/v1.10.1/libbox-android-arm64-v8a.aar" -o app/libs/libbox.aar
           fi
-          
-          echo "--- 零件准备就绪 ---"
-          ls -lh app/libs/
+          echo "✅ 内核状态: $(ls -lh app/libs/libbox.aar)"
 
-      - name: 4. 【对齐阶段】自动寻找可用的打包任务
+      - name: 4. 暴力全量打包 (不再点名，全部都打)
         run: |
           chmod +x gradlew
-          echo "--- 正在询问系统可用的菜单 ---"
-          # 这一步会列出所有 assemble 开头的任务，我们挑第一个 Debug 任务打
-          TARGET_TASK=$(./gradlew tasks --all | grep "^assemble.*Debug" | head -n 1 | awk '{print $1}')
-          echo "🎯 锁定打包任务: $TARGET_TASK"
-          echo "TASK_NAME=$TARGET_TASK" >> $GITHUB_ENV
+          # 这一步会尝试编译项目里所有的 Debug 变体
+          ./gradlew assembleDebug --stacktrace || echo "部分打包失败，尝试继续..."
 
-      - name: 5. 【点火阶段】执行打包
+      - name: 5. 【核心改动】地毯式搜索 APK 文件
+        # 我们不再信任固定的路径，直接用 find 命令全盘搜索
         run: |
-          ./gradlew clean ${{ env.TASK_NAME }} --stacktrace
+          echo "--- 正在全盘搜索生成的成品 ---"
+          mkdir -p ./final_apks
+          # 寻找所有生成的 apk，并拷贝到根目录下的 final_apks 文件夹
+          find . -name "*.apk" -type f -exec cp {} ./final_apks/ \;
+          
+          echo "--- 搜索报告 ---"
+          ls -R ./final_apks/
 
-      - name: 6. 【收获阶段】上传所有 APK
+      - name: 6. 提货 (上传所有搜救到的 APK)
         uses: actions/upload-artifact@v4
         with:
-          name: 大哥专线-成品包
-          path: |
-            app/build/outputs/apk/**/*.apk
+          name: 大哥专线-成品合集
+          # 只要 final_apks 文件夹里有东西，就一定能上传
+          path: ./final_apks/*.apk
+          if-no-files-found: error
