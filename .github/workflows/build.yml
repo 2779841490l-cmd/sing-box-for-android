@@ -1,4 +1,4 @@
-name: 大哥专线-安卓客户端终极版
+name: 大哥专线-全自动手搓最新版
 
 on:
   workflow_dispatch:
@@ -7,52 +7,54 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. 检出代码
+      - name: 1. 检出【安卓壳子】代码
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          path: app-repo
 
-      - name: 2. 准备 Java 环境
-        uses: actions/setup-java@v4
+      - name: 2. 检出【最新核心】源码
+        uses: actions/checkout@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          repository: SagerNet/sing-box
+          ref: main  # 强制使用官网最新代码，1.12/1.13 通吃
+          path: core-repo
 
-      - name: 3. 官方内网调拨最新内核 (Hy2+Reality满血版)
-        # 逻辑：直接抓取 SagerNet 官方最新发布的安卓内核，绝对不 404
+      - name: 3. 准备环境 (Go 1.24 + Java 17 + NDK)
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24' # 必须用最新的 Go，否则编不动新版核心
+      
+      - name: 4. 准备安卓 NDK (最新 r27)
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27
+
+      - name: 5. 核心步骤：现场“手搓”发动机 (AAR)
         run: |
-          mkdir -p app/libs
-          echo "🚀 正在通过官方最新通道提货..."
-          curl -kL "https://github.com/SagerNet/sing-box/releases/latest/download/libbox-android-arm64-v8a.aar" -o app/libs/libbox.aar
+          cd core-repo
+          # 这是官方最正宗的编译命令，不需要 Makefile
+          go run ./cmd/internal/build_libbox -target android
           
-          # 检查文件大小 (正常的内核约 30MB)
-          FILESIZE=$(stat -c%s "app/libs/libbox.aar")
-          echo "📊 内核体检：$FILESIZE 字节"
-          if [ $FILESIZE -lt 10000000 ]; then
-            echo "❌ 提货失败，零件不对！"
-            exit 1
+          # 检查手搓成果
+          if [ -f "libbox.aar" ]; then
+             echo "✅ 发动机手搓成功！"
+             mkdir -p ../app-repo/app/libs
+             cp libbox.aar ../app-repo/app/libs/
+          else
+             echo "❌ 手搓失败，代码有问题！"
+             exit 1
           fi
 
-      - name: 4. 自动化识别并执行打包
-        # 逻辑：不管你的项目叫 Standard 还是 Other，让脚本自己找能跑的任务
+      - name: 6. 最后的总装 (APK)
         run: |
+          cd app-repo
           chmod +x gradlew
-          # 先清理
-          ./gradlew clean
-          # 自动寻找第一个可用的 Debug 任务
+          # 自动寻找你能用的打包任务
           TASK=$(./gradlew tasks --all | grep "^assemble.*Debug" | head -n 1 | awk '{print $1}')
-          echo "🎯 锁定目标任务: $TASK"
           ./gradlew $TASK --stacktrace
 
-      - name: 5. 全盘搜救成品 APK
-        run: |
-          mkdir -p final_apks
-          find . -name "*.apk" -type f -exec cp {} ./final_apks/ \;
-          echo "--- 搜救清单 ---"
-          ls ./final_apks/
-
-      - name: 6. 提货 (上传 APK)
+      - name: 7. 提货
         uses: actions/upload-artifact@v4
         with:
-          name: 大哥专线-客户端成品
-          path: ./final_apks/*.apk
+          name: 大哥专线-手搓最新版
+          path: app-repo/app/build/outputs/apk/**/*.apk
