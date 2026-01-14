@@ -1,60 +1,77 @@
-name: 大哥专线-全自动手搓最新版
+name: 大哥专线-作者官方原装流程版
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version name"
+        default: "1.0.0"
+        required: true
 
 jobs:
-  build:
+  build_android:
+    name: 按照作者逻辑-编译Android
     runs-on: ubuntu-latest
     steps:
-      - name: 1. 检出【安卓壳子】代码
+      - name: 1. 检出代码 (必须包含子模块)
         uses: actions/checkout@v4
         with:
-          path: app-repo
+          fetch-depth: 0
+          submodules: 'recursive' # 这一步极其重要，作者强制要求的
 
-      - name: 2. 检出【最新核心】源码
-        uses: actions/checkout@v4
-        with:
-          repository: SagerNet/sing-box
-          ref: main  # 强制使用官网最新代码，1.12/1.13 通吃
-          path: core-repo
-
-      - name: 3. 准备环境 (Go 1.24 + Java 17 + NDK)
+      - name: 2. 准备环境 (Go 1.25.5 + Java 17)
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24' # 必须用最新的 Go，否则编不动新版核心
-      
-      - name: 4. 准备安卓 NDK (最新 r27)
+          go-version: '^1.25.5'
+      - name: 准备 Java
+        run: |
+          sudo apt update && sudo apt install -y openjdk-17-jdk-headless
+          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
+
+      - name: 3. 准备作者指定的 NDK r28
+        id: setup-ndk
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r27
+          ndk-version: r28
 
-      - name: 5. 核心步骤：现场“手搓”发动机 (AAR)
-        run: |
-          cd core-repo
-          # 这是官方最正宗的编译命令，不需要 Makefile
-          go run ./cmd/internal/build_libbox -target android
-          
-          # 检查手搓成果
-          if [ -f "libbox.aar" ]; then
-             echo "✅ 发动机手搓成功！"
-             mkdir -p ../app-repo/app/libs
-             cp libbox.aar ../app-repo/app/libs/
-          else
-             echo "❌ 手搓失败，代码有问题！"
-             exit 1
-          fi
+      - name: 4. 关键：执行作者的库安装指令 (lib_install)
+        # 这就是解决 gomobile missing 的官方终极手段
+        run: |-
+          make lib_install
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
 
-      - name: 6. 最后的总装 (APK)
-        run: |
-          cd app-repo
+      - name: 5. 执行作者的库编译指令 (lib_android)
+        # 这一步会现场生产出 libbox.aar 发动机
+        run: |-
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          make lib_android
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+
+      - name: 6. 按照作者逻辑-进入子目录总装
+        # 作者的逻辑是：把 aar 拷进去，然后 cd 到 clients/android 打包
+        run: |-
+          mkdir -p clients/android/app/libs
+          cp *.aar clients/android/app/libs/
+          cd clients/android
           chmod +x gradlew
-          # 自动寻找你能用的打包任务
-          TASK=$(./gradlew tasks --all | grep "^assemble.*Debug" | head -n 1 | awk '{print $1}')
-          ./gradlew $TASK --stacktrace
+          # 我们打 OtherRelease 版本，这是最通用的
+          ./gradlew :app:assembleOtherRelease
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
 
-      - name: 7. 提货
+      - name: 7. 地毯式收货
+        run: |
+          mkdir -p final_apks
+          find clients/android/app/build/outputs/apk -name "*.apk" -exec cp {} ./final_apks/ \;
+          ls -R ./final_apks/
+
+      - name: 8. 提货
         uses: actions/upload-artifact@v4
         with:
-          name: 大哥专线-手搓最新版
-          path: app-repo/app/build/outputs/apk/**/*.apk
+          name: 大哥专线-作者正宗APK
+          path: ./final_apks/*.apk
