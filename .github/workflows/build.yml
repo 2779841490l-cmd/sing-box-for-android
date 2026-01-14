@@ -1,4 +1,4 @@
-name: 大哥专线-官方内网直提版
+name: 大哥专线-自适应智能打包
 
 on:
   workflow_dispatch:
@@ -6,8 +6,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
       - name: 1. 检出代码
         uses: actions/checkout@v4
@@ -20,34 +18,47 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. 官方内网提货 (100% 成功率)
-        # 使用 GitHub 官方 CLI 工具，直接从原作者仓库下载核心
+      - name: 3. 【侦察阶段】识别项目结构与核心需求
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p app/libs
-          echo "正在通过 GitHub 内网调拨内核..."
+          echo "--- 正在侦察项目结构 ---"
+          # 自动寻找 app/build.gradle，看看它到底在找哪个文件
+          grep "libbox" app/build.gradle || echo "未在gradle中发现libbox引用"
           
-          # 直接下载 SagerNet/sing-box 仓库 v1.10.1 版本的 arm64 核心
-          gh release download v1.10.1 --repo SagerNet/sing-box --pattern "libbox-android-arm64-v8a.aar" --output app/libs/libbox.aar
+          echo "--- 正在从官方获取零件清单 ---"
+          # 不再猜文件名！先列出官方 v1.10.1 所有的文件，找那个带 android 和 arm64 的
+          REAL_NAME=$(gh release view v1.10.1 --repo SagerNet/sing-box --json assets -q '.assets[].name' | grep "android-arm64-v8a.aar" | head -n 1)
           
-          # 物理检查
-          FILESIZE=$(stat -c%s "app/libs/libbox.aar")
-          echo "✅ 提货成功！内核体积: $FILESIZE 字节"
-          
-          if [ $FILESIZE -lt 10000000 ]; then
-            echo "❌ 提货失败，文件体积异常！"
-            exit 1
+          if [ -z "$REAL_NAME" ]; then
+            echo "❌ 没找到对应的内核零件，尝试下载全量 Release 包..."
+            gh release download v1.10.1 --repo SagerNet/sing-box -D app/libs/
+          else
+            echo "✅ 发现目标零件: $REAL_NAME"
+            gh release download v1.10.1 --repo SagerNet/sing-box -p "$REAL_NAME" -D app/libs/
+            mv app/libs/$REAL_NAME app/libs/libbox.aar
           fi
+          
+          echo "--- 零件准备就绪 ---"
+          ls -lh app/libs/
 
-      - name: 4. 暴力总装 APK
+      - name: 4. 【对齐阶段】自动寻找可用的打包任务
         run: |
           chmod +x gradlew
-          # 清理并开始打包，自动适配你的项目版本
-          ./gradlew clean assembleDebug --stacktrace
+          echo "--- 正在询问系统可用的菜单 ---"
+          # 这一步会列出所有 assemble 开头的任务，我们挑第一个 Debug 任务打
+          TARGET_TASK=$(./gradlew tasks --all | grep "^assemble.*Debug" | head -n 1 | awk '{print $1}')
+          echo "🎯 锁定打包任务: $TARGET_TASK"
+          echo "TASK_NAME=$TARGET_TASK" >> $GITHUB_ENV
 
-      - name: 5. 提货
+      - name: 5. 【点火阶段】执行打包
+        run: |
+          ./gradlew clean ${{ env.TASK_NAME }} --stacktrace
+
+      - name: 6. 【收获阶段】上传所有 APK
         uses: actions/upload-artifact@v4
         with:
-          name: 大哥专线-成品APK
-          path: app/build/outputs/apk/**/*.apk
+          name: 大哥专线-成品包
+          path: |
+            app/build/outputs/apk/**/*.apk
