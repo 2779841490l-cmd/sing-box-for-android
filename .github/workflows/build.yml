@@ -1,4 +1,4 @@
-name: 大哥专线-终极组装-不再报错版
+name: 大哥专线-官方内网直提版
 
 on:
   workflow_dispatch:
@@ -6,54 +6,48 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: 1. 检出代码
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: 2. 准备 Java 环境
+      - name: 2. 初始化 Java 环境
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. 强力“捕获”内核 (逻辑闭环版)
+      - name: 3. 官方内网提货 (100% 成功率)
+        # 使用 GitHub 官方 CLI 工具，直接从原作者仓库下载核心
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p app/libs
+          echo "正在通过 GitHub 内网调拨内核..."
           
-          # 核心修正：使用 wget 替代 curl，强制 http1.1 协议，避开 PROTOCOL_ERROR
-          # 同时增加 --no-check-certificate 和 10 次重试逻辑
-          wget --http-user-agent="Mozilla/5.0" \
-               --no-check-certificate \
-               --protocol-directories \
-               --tries=10 \
-               --retry-connrefused \
-               --waitretry=3 \
-               "https://github.com/SagerNet/sing-box/releases/download/v1.10.1/libbox-android-arm64-v8a.aar" \
-               -O app/libs/libbox.aar || {
-                 echo "官方链失败，尝试直连镜像..."
-                 # 强制使用 wget 且不检查证书，暴力下载
-                 wget --no-check-certificate --tries=5 "https://ghproxy.com/https://github.com/SagerNet/sing-box/releases/download/v1.10.1/libbox-android-arm64-v8a.aar" -O app/libs/libbox.aar
-               }
-
-          # 物理校验：检查下载的文件到底是不是真家伙
+          # 直接下载 SagerNet/sing-box 仓库 v1.10.1 版本的 arm64 核心
+          gh release download v1.10.1 --repo SagerNet/sing-box --pattern "libbox-android-arm64-v8a.aar" --output app/libs/libbox.aar
+          
+          # 物理检查
           FILESIZE=$(stat -c%s "app/libs/libbox.aar")
-          echo "✅ 捕获内核大小: $FILESIZE 字节"
+          echo "✅ 提货成功！内核体积: $FILESIZE 字节"
           
           if [ $FILESIZE -lt 10000000 ]; then
-            echo "❌ 严重警告：文件体积不对，下载失败！"
+            echo "❌ 提货失败，文件体积异常！"
             exit 1
           fi
 
-      - name: 4. 暴力编译 APK
+      - name: 4. 暴力总装 APK
         run: |
           chmod +x gradlew
-          # 使用 clean 确保没有残留，然后 assembleDebug 扫描所有版本
+          # 清理并开始打包，自动适配你的项目版本
           ./gradlew clean assembleDebug --stacktrace
 
       - name: 5. 提货
         uses: actions/upload-artifact@v4
         with:
-          name: 大哥专线-满血成品
+          name: 大哥专线-成品APK
           path: app/build/outputs/apk/**/*.apk
